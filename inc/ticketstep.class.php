@@ -15,6 +15,7 @@ class PluginEscalationTicketStep extends CommonDBTM {
   const STATUS_APPROVED  = 2;
   const STATUS_REJECTED  = 3;
   const STATUS_TIMED_OUT = 4;
+  const STATUS_SKIPPED   = 5; // Outro começo entrou mais adiante; esta etapa não abre
 
   static function getTypeName($nb = 0) {
     return _n('Etapa do Chamado', 'Etapas do Chamado', $nb, 'escalation');
@@ -74,6 +75,7 @@ class PluginEscalationTicketStep extends CommonDBTM {
       self::STATUS_APPROVED  => '<span style="color:#16a34a">✅ ' . __('Aprovado', 'escalation') . '</span>',
       self::STATUS_REJECTED  => '<span style="color:#dc2626">❌ ' . __('Reprovado', 'escalation') . '</span>',
       self::STATUS_TIMED_OUT => '<span style="color:#6b7280">⏰ ' . __('Reprovação automática', 'escalation') . '</span>',
+      self::STATUS_SKIPPED   => '<span style="color:#9ca3af">— ' . __('Não percorrida', 'escalation') . '</span>',
     ];
     return $labels[$status] ?? (string) $status;
   }

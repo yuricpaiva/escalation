@@ -4,7 +4,7 @@ if (!defined('GLPI_ROOT')) {
   include ('../../../inc/includes.php');
 }
 
-Session::checkRight("config", READ);
+if (!PluginEscalationFlow::canView()) Html::displayErrorAndDie(__('Você não tem permissão para visualizar workflows.', 'escalation'));
 
 Html::header(PluginEscalationFlow::getTypeName(Session::getPluralNumber()), $_SERVER["PHP_SELF"], "admin", "pluginescalationflow", "flow");
 

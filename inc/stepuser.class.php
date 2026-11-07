@@ -9,7 +9,7 @@ if (!defined('GLPI_ROOT')) {
  * Resolvidos em PluginEscalationTicketFlow::resolveApprovers() no momento do disparo.
  */
 class PluginEscalationStepUser extends CommonDBTM {
-  static $rightname = 'config';
+  static $rightname = 'plugin_escalation_manage';
 
   static function getTypeName($nb = 0) {
     return _n('Usuário da Etapa', 'Usuários da Etapa', $nb, 'escalation');
@@ -40,9 +40,9 @@ class PluginEscalationStepUser extends CommonDBTM {
     return true;
   }
 
-  static function canCreate(): bool { return Session::haveRight(self::$rightname, UPDATE); }
-  static function canView(): bool   { return Session::haveRight(self::$rightname, READ); }
-  static function canPurge(): bool  { return Session::haveRight(self::$rightname, UPDATE); }
+  static function canCreate(): bool { return PluginEscalationProfile::have(PluginEscalationProfile::MANAGE); }
+  static function canView(): bool   { return PluginEscalationProfile::have(PluginEscalationProfile::MANAGE); }
+  static function canPurge(): bool  { return PluginEscalationProfile::have(PluginEscalationProfile::MANAGE); }
 
   static function getUsersForStep(int $step_id): array {
     global $DB;

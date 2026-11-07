@@ -7,9 +7,10 @@ if (!defined('GLPI_ROOT')) {
 $flow = new PluginEscalationFlow();
 
 if (isset($_POST["add"])) {
-  $flow->check(-1, CREATE, $_POST);
+  if (!PluginEscalationFlow::canCreate()) Html::displayErrorAndDie(__('Você não tem permissão para criar fluxos.', 'escalation'));
   if ($newID = $flow->add($_POST)) {
-    Html::redirect($flow->getFormURL()."?id=".$newID);
+    PluginEscalationVisualEditor::applyStarterTemplate((int) $newID, (string) ($_POST['visual_template'] ?? 'simple'));
+    Html::redirect($flow->getFormURL()."?id=".$newID."&forcetab=PluginEscalationFlow$1");
   }
   Html::back();
 } else if (isset($_POST["update"])) {

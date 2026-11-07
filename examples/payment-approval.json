@@ -1,0 +1,44 @@
+{
+  "schema": "escalation-workflow/v1",
+  "name": "Aprovação de pagamentos",
+  "description": "Supervisor do solicitante seguido de aprovação financeira.",
+  "priority": 100,
+  "entity": "${ENTITY}",
+  "recursive": true,
+  "condition_groups": [
+    {
+      "all": [
+        {"field": "event", "operator": "equals", "value": "created"},
+        {"field": "category", "operator": "equals", "value": "${PAYMENT_CATEGORY}"},
+        {"field": "requester_group", "operator": "member_of", "value": "${PAYMENT_REQUESTERS_GROUP}"}
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "key": "supervisor",
+      "name": "Supervisor do solicitante",
+      "kind": "approval",
+      "approvers": [{"source": "supervisor"}],
+      "quorum": "all",
+      "prevent_self_approval": true,
+      "fallback_user": "${OPTIONAL_FALLBACK_USER}",
+      "transitions": {"approved": "finance", "rejected": "rejected", "approver_missing": "pending_configuration"}
+    },
+    {
+      "key": "finance",
+      "name": "Gerência financeira",
+      "kind": "approval",
+      "approvers": [{"source": "user", "value": "${FINANCE_MANAGER}"}],
+      "quorum": "all",
+      "prevent_self_approval": true,
+      "transitions": {"approved": "approved", "rejected": "rejected"}
+    }
+  ],
+  "actions": [
+    {"event": "flow_approved", "order": 1, "type": "assign_user", "parameters": {"users_id": "${PAYMENT_OWNER}"}},
+    {"event": "flow_approved", "order": 2, "type": "change_status", "parameters": {"status": 2}},
+    {"event": "flow_approved", "order": 3, "type": "add_followup", "parameters": {"content": "Pagamento autorizado pelas instâncias responsáveis.", "is_private": 0}},
+    {"event": "flow_approved", "order": 4, "type": "notify", "parameters": {"event": "escalation_approved"}}
+  ]
+}

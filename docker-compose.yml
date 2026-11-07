@@ -1,0 +1,36 @@
+name: escalation-dev
+services:
+  glpi:
+    image: glpi/glpi:11.0.9
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    environment:
+      GLPI_DB_HOST: db
+      GLPI_DB_PORT: 3306
+      GLPI_DB_NAME: glpi
+      GLPI_DB_USER: glpi
+      GLPI_DB_PASSWORD: glpi
+      GLPI_CRONTAB_ENABLED: 1
+    volumes:
+      - glpi_data:/var/glpi
+      - ./:/var/glpi/marketplace/escalation:ro
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: glpi
+      MARIADB_USER: glpi
+      MARIADB_PASSWORD: glpi
+      MARIADB_ROOT_PASSWORD: escalation-dev
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - db_data:/var/lib/mysql
+volumes:
+  glpi_data:
+  db_data:

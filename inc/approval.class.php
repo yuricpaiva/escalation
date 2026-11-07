@@ -12,6 +12,7 @@ class PluginEscalationApproval extends CommonDBTM {
 
   const ACTION_APPROVE = 1;
   const ACTION_REJECT  = 2;
+  const ACTION_SOLVE   = 3;
 
   static function getTypeName($nb = 0) {
     return _n('Aprovação', 'Aprovações', $nb, 'escalation');
@@ -64,7 +65,7 @@ class PluginEscalationApproval extends CommonDBTM {
     // Validações
     $ts = new PluginEscalationTicketStep();
     if (!$ts->getFromDB($ticketstep_id)) return false;
-    if ($ts->fields['status'] !== PluginEscalationTicketStep::STATUS_PENDING) return false;
+    if ((int) $ts->fields['status'] !== PluginEscalationTicketStep::STATUS_PENDING) return false;
     if (!self::isAuthorizedApprover($ticketstep_id, $users_id)) return false;
     if (self::hasUserVoted($ticketstep_id, $users_id)) return false;
 
@@ -137,9 +138,9 @@ class PluginEscalationApproval extends CommonDBTM {
         return 'pending';
 
       case PluginEscalationStep::QUORUM_MAJORITY:
-        $majority = (int) ceil($total / 2);
+        $majority = intdiv($total, 2) + 1;
         if ($approvals >= $majority) return 'approved';
-        if ($rejections >= $majority) return 'rejected';
+        if (($total - $rejections) < $majority) return 'rejected';
         return 'pending';
 
       case PluginEscalationStep::QUORUM_ALL:

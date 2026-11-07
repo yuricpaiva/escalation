@@ -5,7 +5,7 @@ if (!defined('GLPI_ROOT')) {
 }
 
 class PluginEscalationStep extends CommonDBTM {
-  static $rightname = 'config';
+  static $rightname = 'plugin_escalation_manage';
 
   const TYPE_PEOPLE    = 'people';
   const TYPE_HIERARCHY = 'hierarchy';
@@ -101,10 +101,10 @@ class PluginEscalationStep extends CommonDBTM {
     return $input;
   }
 
-  static function canCreate(): bool { return Session::haveRight(self::$rightname, UPDATE); }
-  static function canView(): bool   { return Session::haveRight(self::$rightname, READ); }
-  static function canUpdate(): bool { return Session::haveRight(self::$rightname, UPDATE); }
-  static function canPurge(): bool  { return Session::haveRight(self::$rightname, UPDATE); }
+  static function canCreate(): bool { return PluginEscalationProfile::have(PluginEscalationProfile::MANAGE); }
+  static function canView(): bool   { return PluginEscalationProfile::have(PluginEscalationProfile::MANAGE); }
+  static function canUpdate(): bool { return PluginEscalationProfile::have(PluginEscalationProfile::MANAGE); }
+  static function canPurge(): bool  { return PluginEscalationProfile::have(PluginEscalationProfile::MANAGE); }
 
   static function getTypeOptions(): array {
     return [
@@ -207,9 +207,10 @@ class PluginEscalationStep extends CommonDBTM {
     }
 
     // Lista de etapas
+    $draft_version_id = PluginEscalationFlowVersion::ensureDraft($flow_id);
     $steps = $DB->request([
       'FROM'    => self::getTable(),
-      'WHERE'   => ['plugin_escalation_flows_id' => $flow_id],
+      'WHERE'   => ['plugin_escalation_flows_id' => $flow_id, 'plugin_escalation_flowversions_id' => $draft_version_id],
       'ORDERBY' => ['step_order ASC'],
     ]);
 
@@ -528,6 +529,15 @@ class PluginEscalationStep extends CommonDBTM {
       }
     </script>";
 
+    echo "<tr class='tab_bg_2'><td>" . __('Impedir autoaprovação', 'escalation') . "</td><td>";
+    Dropdown::showYesNo('prevent_self_approval', (int)($this->fields['prevent_self_approval'] ?? 1));
+    echo "</td><td>" . __('Permitir solucionar', 'escalation') . "</td><td>";
+    Dropdown::showYesNo('allow_solve', (int)($this->fields['allow_solve'] ?? 0));
+    echo "</td></tr>";
+    echo "<tr class='tab_bg_2'><td>" . __('Aprovador substituto', 'escalation') . "</td><td colspan='3'>";
+    User::dropdown(['name' => 'fallback_users_id', 'value' => (int)($this->fields['fallback_users_id'] ?? 0), 'right' => 'all']);
+    echo "</td></tr>";
+
     $this->showFormButtons($options);
 
     echo Html::scriptBlock("escalationToggleStepFields('" . addslashes($current_type) . "');");
@@ -545,6 +555,7 @@ class PluginEscalationStep extends CommonDBTM {
       PluginEscalationStepUser::showForStep($this, $flow_id);
       echo "  </div>";
       echo "</div>";
+      PluginEscalationAdmin::showStepConfiguration($this);
     }
 
     return true;
@@ -575,7 +586,7 @@ class PluginEscalationStep extends CommonDBTM {
     $row = $DB->request([
       'SELECT' => ['MAX' => 'step_order AS max_order'],
       'FROM'   => self::getTable(),
-      'WHERE'  => ['plugin_escalation_flows_id' => $flow_id],
+      'WHERE'  => ['plugin_escalation_flows_id' => $flow_id, 'plugin_escalation_flowversions_id' => PluginEscalationFlowVersion::ensureDraft($flow_id)],
     ])->current();
     return ($row['max_order'] ?? 0) + 1;
   }
@@ -595,19 +606,20 @@ class PluginEscalationStep extends CommonDBTM {
     $current = (new self());
     $current->getFromDB($id);
     $flow_id = $current->fields['plugin_escalation_flows_id'];
+    $version_id = $current->fields['plugin_escalation_flowversions_id'] ?? 0;
     $order   = $current->fields['step_order'];
 
     if ($direction === 'up') {
       $row = $DB->request([
         'FROM'    => self::getTable(),
-        'WHERE'   => ['plugin_escalation_flows_id' => $flow_id, ['step_order' => ['<', $order]]],
+        'WHERE'   => ['plugin_escalation_flows_id' => $flow_id, 'plugin_escalation_flowversions_id' => $version_id, ['step_order' => ['<', $order]]],
         'ORDERBY' => ['step_order DESC'],
         'LIMIT'   => 1,
       ])->current();
     } else {
       $row = $DB->request([
         'FROM'    => self::getTable(),
-        'WHERE'   => ['plugin_escalation_flows_id' => $flow_id, ['step_order' => ['>', $order]]],
+        'WHERE'   => ['plugin_escalation_flows_id' => $flow_id, 'plugin_escalation_flowversions_id' => $version_id, ['step_order' => ['>', $order]]],
         'ORDERBY' => ['step_order ASC'],
         'LIMIT'   => 1,
       ])->current();

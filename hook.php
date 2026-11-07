@@ -37,6 +37,14 @@ function plugin_escalation_install() {
   // Migra itilcategories_id da tabela de fluxos para a tabela de junção
   PluginEscalationFlowCategory::migrateFromFlows();
 
+  // O esquema 2.x é instalado após a migração de categorias e é estritamente aditivo.
+  PluginEscalationSchema::installBaseData($migration, $version);
+  foreach (PluginEscalationProfile::getAllRights() as $right) {
+    if (countElementsInTable('glpi_profilerights', ['name' => $right['field']]) === 0) {
+      ProfileRight::addProfileRights([$right['field']]);
+    }
+  }
+
   // Inicializa valores padrão das configurações globais do plugin
   PluginEscalationConfig::setDefaults();
 
@@ -51,6 +59,17 @@ function plugin_escalation_install() {
       'comment' => 'Verifica timeouts de etapas e fluxos de aprovação pendentes',
       'mode'    => CronTask::MODE_INTERNAL,
       'state'   => CronTask::STATE_DISABLE,
+    ]
+  );
+  CronTask::register(
+    'PluginEscalationActionExecutor',
+    'processqueue',
+    MINUTE_TIMESTAMP,
+    [
+      'comment' => 'Executa ações idempotentes dos workflows Escalation',
+      // CLI/externo: mesmo padrão de queuednotification — não depende de tráfego web.
+      'mode' => CronTask::MODE_EXTERNAL,
+      'state' => CronTask::STATE_WAITING,
     ]
   );
 
@@ -102,6 +121,9 @@ function plugin_escalation_uninstall() {
 
   // Remove configurações globais do plugin
   PluginEscalationConfig::removeConfig();
+  foreach (PluginEscalationProfile::getAllRights() as $right) {
+    ProfileRight::deleteProfileRights([$right['field']]);
+  }
 
   $pref = new DisplayPreference();
   $pref->deleteByCriteria(['itemtype' => ['LIKE', 'PluginEscalation%']]);

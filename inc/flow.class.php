@@ -92,6 +92,7 @@ class PluginEscalationFlow extends CommonDBTM {
       PluginEscalationFlowCategory::saveForFlow($this->getID(), $this->_categories_ids);
       unset($this->_categories_ids);
     }
+    if ($this->getID() > 0) PluginEscalationFlowVersion::syncDraftMetadata($this->getID());
   }
 
   public function post_updateItem($history = true) {
@@ -99,12 +100,13 @@ class PluginEscalationFlow extends CommonDBTM {
       PluginEscalationFlowCategory::saveForFlow($this->getID(), $this->_categories_ids);
       unset($this->_categories_ids);
     }
+    PluginEscalationFlowVersion::syncDraftMetadata($this->getID());
   }
 
-  static function canCreate(): bool { return Session::haveRight(self::$rightname, UPDATE); }
-  static function canView(): bool   { return Session::haveRight(self::$rightname, READ); }
-  static function canUpdate(): bool { return Session::haveRight(self::$rightname, UPDATE); }
-  static function canPurge(): bool  { return Session::haveRight(self::$rightname, UPDATE); }
+  static function canCreate(): bool { return PluginEscalationProfile::have(PluginEscalationProfile::MANAGE); }
+  static function canView(): bool   { return PluginEscalationProfile::have(PluginEscalationProfile::VIEW) || PluginEscalationProfile::have(PluginEscalationProfile::MANAGE); }
+  static function canUpdate(): bool { return PluginEscalationProfile::have(PluginEscalationProfile::MANAGE); }
+  static function canPurge(): bool  { return PluginEscalationProfile::have(PluginEscalationProfile::MANAGE); }
 
   static function getMenuContent() {
     if (!static::canView()) return false;
@@ -127,6 +129,7 @@ class PluginEscalationFlow extends CommonDBTM {
           'links' => [
             'add'    => "$p/front/flow.form.php",
             'search' => "$p/front/flow.php",
+            '<i class="ti ti-file-import me-1"></i>' . __('Importar workflow', 'escalation') => "$p/front/import.form.php",
             '<i class="ti ti-file-description me-1"></i>' . $lbl_tmpls => "$p/front/template.php",
           ],
         ],
@@ -203,6 +206,25 @@ class PluginEscalationFlow extends CommonDBTM {
     echo "<td>" . __('Active') . "</td>";
     echo "<td>"; Dropdown::showYesNo('is_active', $this->fields['is_active']); echo "</td>";
     echo "</tr>";
+
+    if ($this->isNewItem()) {
+      echo "<tr class='tab_bg_2'><td>" . __('Como deseja começar?', 'escalation') . "</td><td colspan='3'>";
+      Dropdown::showFromArray('visual_template', [
+        'empty' => __('Fluxo vazio', 'escalation'),
+        'simple' => __('Aprovação simples', 'escalation'),
+        'double' => __('Aprovação em duas etapas', 'escalation'),
+        'assignment' => __('Duas aprovações e atribuição final', 'escalation'),
+      ], ['value' => 'simple', 'width' => '100%']);
+      echo "<small class='text-muted d-block mt-1'>" . __('Depois de criar, você será levado ao Editor visual para escolher as pessoas e as regras.', 'escalation') . '</small></td></tr>';
+    }
+
+    echo "<tr class='tab_bg_2'>";
+    echo "<td>" . __('Descrição', 'escalation') . "</td><td>" . Html::textarea(['name' => 'description', 'value' => $this->fields['description'] ?? '', 'rows' => 3, 'cols' => 50, 'display' => false]) . "</td>";
+    echo "<td>" . __('Prioridade', 'escalation') . "</td><td>" . Html::input('priority', ['value' => (int)($this->fields['priority'] ?? 0), 'type' => 'number']) . "</td>";
+    echo "</tr>";
+    echo "<tr class='tab_bg_1'><td>" . __('Entidade', 'escalation') . "</td><td>";
+    Entity::dropdown(['name' => 'entities_id', 'value' => (int)($this->fields['entities_id'] ?? 0), 'entity' => $_SESSION['glpiactiveentities'] ?? 0]);
+    echo "</td><td>" . __('Recursivo', 'escalation') . "</td><td>"; Dropdown::showYesNo('is_recursive', (int)($this->fields['is_recursive'] ?? 0)); echo "</td></tr>";
 
     echo "<tr class='tab_bg_1'>";
     echo "<td>" . __('Categorias ITIL', 'escalation') . "</td>";
@@ -282,18 +304,27 @@ class PluginEscalationFlow extends CommonDBTM {
     $ong = [];
     $this->addDefaultFormTab($ong);
     $this->addStandardTab(__CLASS__, $ong, $options);
+    $this->addStandardTab('PluginEscalationAdmin', $ong, $options);
     return $ong;
   }
 
   public function getTabNameForItem(CommonGLPI $item, $withtemplate = 0) {
     if ($item->getType() === static::class && !$item->isNewItem()) {
-      return [1 => CommonGLPI::createTabEntry(__('Etapas', 'escalation'), 0, static::class, 'ti ti-list')];
+      return [
+        1 => CommonGLPI::createTabEntry(__('Editor visual', 'escalation'), 0, static::class, 'ti ti-route'),
+        2 => CommonGLPI::createTabEntry(__('Modo avançado', 'escalation'), 0, static::class, 'ti ti-adjustments'),
+        3 => CommonGLPI::createTabEntry(__('Etapas (legado)', 'escalation'), 0, static::class, 'ti ti-list'),
+      ];
     }
     return '';
   }
 
   public static function displayTabContentForItem(CommonGLPI $item, $tabnum = 1, $withtemplate = 0) {
     if ($item->getType() === static::class && $tabnum == 1) {
+      PluginEscalationVisualEditor::showForFlow($item);
+    } elseif ($item->getType() === static::class && $tabnum == 2) {
+      PluginEscalationAdmin::showForFlow($item);
+    } elseif ($item->getType() === static::class && $tabnum == 3) {
       PluginEscalationStep::showForFlow($item);
     }
     return true;
@@ -304,30 +335,7 @@ class PluginEscalationFlow extends CommonDBTM {
   // -------------------------------------------------------------------------
 
   static function ticketAdd($ticket) {
-    global $DB;
-
-    if (empty($ticket->fields['itilcategories_id'])) return;
-
-    $iterator = $DB->request([
-      'SELECT'     => [self::getTable() . '.*'],
-      'FROM'       => self::getTable(),
-      'INNER JOIN' => [
-        PluginEscalationFlowCategory::getTable() => [
-          'ON' => [
-            self::getTable()                          => 'id',
-            PluginEscalationFlowCategory::getTable()  => 'plugin_escalation_flows_id',
-          ],
-        ],
-      ],
-      'WHERE' => [
-        PluginEscalationFlowCategory::getTable() . '.itilcategories_id' => $ticket->fields['itilcategories_id'],
-        self::getTable() . '.is_active'                                  => 1,
-      ],
-    ]);
-
-    foreach ($iterator as $flow_data) {
-      PluginEscalationTicketFlow::startFlow($ticket, $flow_data['id']);
-    }
+    if ($ticket instanceof Ticket) PluginEscalationWorkflow::handleTicket($ticket, 'created');
   }
 
   static function preTicketUpdate($ticket) {
@@ -336,6 +344,7 @@ class PluginEscalationFlow extends CommonDBTM {
   }
 
   static function ticketUpdate(Ticket $ticket): void {
+    PluginEscalationWorkflow::handleTicket($ticket, 'updated');
     // `oldvalues` só traz `status` quando o status mudou nesta atualização; sem essa
     // checagem, qualquer update de um chamado já solucionado (ex.: o próprio GLPI
     // atualizando a validação global) era tratado como "acabou de ser solucionado".
@@ -345,6 +354,23 @@ class PluginEscalationFlow extends CommonDBTM {
     // Quando chamado vai para "Solucionado", ativa etapas com generate_immediately = 0
     if ($new_status === Ticket::SOLVED && $old_status !== Ticket::SOLVED) {
       PluginEscalationTicketFlow::ticketSolved($ticket);
+    }
+  }
+
+  /** GLPI 11 passa o NotificationTarget; versões antigas passavam o array de eventos. */
+  static function notificationEvents($target) {
+    $events = [
+      'escalation_workflow' => __('Evento de workflow Escalation', 'escalation'),
+      'escalation_approved' => __('Workflow Escalation aprovado', 'escalation'),
+      'escalation_rejected' => __('Workflow Escalation rejeitado', 'escalation'),
+      'escalation_failed' => __('Falha em workflow Escalation', 'escalation'),
+    ];
+    if (is_object($target) && isset($target->events) && is_array($target->events)) {
+      $target->events = array_merge($target->events, $events);
+      return;
+    }
+    if (is_array($target)) {
+      return array_merge($target, $events);
     }
   }
 }

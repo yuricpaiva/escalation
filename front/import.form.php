@@ -1,0 +1,9 @@
+<?php
+if(!defined('GLPI_ROOT'))include('../../../inc/includes.php');
+if(!PluginEscalationProfile::have(PluginEscalationProfile::MANAGE))Html::displayErrorAndDie(__('Você não tem permissão para administrar workflows.','escalation'));
+if(isset($_POST['import'])){try{$id=PluginEscalationImporter::import($_POST['definition']??'',json_decode($_POST['mapping']??'{}',true,32,JSON_THROW_ON_ERROR));Session::addMessageAfterRedirect(__('Modelo importado como rascunho inativo.','escalation'));Html::redirect(PluginEscalationFlow::getFormURL().'?id='.$id.'&forcetab=PluginEscalationFlow$2');}catch(Throwable $e){Session::addMessageAfterRedirect($e->getMessage(),false,ERROR);}}
+Html::header(__('Importar workflow','escalation'),$_SERVER['PHP_SELF'],'admin','pluginescalationflow','flow');
+echo "<div class='card mx-auto my-3' style='max-width:900px'><div class='card-header'><h2 class='card-title'>".__('Importar modelo Escalation','escalation')."</h2></div><div class='card-body'><form method='post'>".Html::hidden('_glpi_csrf_token',['value'=>Session::getNewCSRFToken()]);
+echo "<label class='form-label' for='definition'>".__('Definição JSON','escalation')."</label><textarea class='form-control font-monospace' id='definition' name='definition' rows='18' required></textarea>";
+echo "<label class='form-label mt-3' for='mapping'>".__('Mapeamento de marcadores (JSON)','escalation')."</label><textarea class='form-control font-monospace' id='mapping' name='mapping' rows='6' required>{}</textarea><div class='form-hint'>".__('Exemplo: {"ENTITY": 1, "PAYMENT_CATEGORY": 4}. Todos os marcadores devem ser resolvidos.','escalation')."</div>";
+echo "<button class='btn btn-primary mt-3' name='import'><i class='ti ti-file-import me-1'></i>".__('Importar como rascunho','escalation')."</button></form></div></div>";Html::footer();

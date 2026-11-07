@@ -1,6 +1,21 @@
-# Escalation — Approval Flow Plugin for GLPI
+# Escalation 2.1 — Motor de fluxos para GLPI 11
 
-The **Escalation** plugin adds structured, multi-step approval flows to GLPI tickets. When a ticket is opened under a configured ITIL category, the plugin automatically activates its linked flow, resolves the approvers, and creates GLPI validations — all without manual intervention.
+## Editor visual 2.1
+
+Abra **Administração > Escalation**, escolha um fluxo e acesse a aba **Editor visual**. O editor permite montar uma sequência de aprovações e ações usando usuários, grupos, categorias, entidades e modelos já cadastrados no GLPI.
+
+Para recompilar os recursos do editor:
+
+```bash
+npm install
+npm run build
+```
+
+Os arquivos gerados ficam em `public/build` e devem acompanhar o plugin na instalação. O servidor de produção não precisa ter Node.js.
+
+Um fluxo comum de pagamento pode ser montado como: **Início → Aprovação do RH → Aprovação Financeira → Atribuir chamado → Fim**. Configure a categoria e o solicitante nas condições de início, escolha os aprovadores em cada etapa e selecione o técnico que receberá o chamado. Use **Validar fluxo** antes de publicar.
+
+The **Escalation** plugin provides versioned, auditable approval workflows for GLPI tickets: triggers and conditions select a flow, sequential steps resolve dynamic approvers, decisions choose a branch, and an idempotent queue executes native GLPI actions.
 
 ---
 
@@ -25,8 +40,8 @@ The **Escalation** plugin adds structured, multi-step approval flows to GLPI tic
 
 | Dependency | Version |
 |---|---|
-| GLPI | ≥ 10.0.0 |
-| PHP | ≥ 7.4 |
+| GLPI | ≥ 11.0.0 and < 12.0.0 |
+| PHP | ≥ 8.2 |
 
 ---
 
@@ -34,7 +49,21 @@ The **Escalation** plugin adds structured, multi-step approval flows to GLPI tic
 
 1. Download the plugin archive and extract it to `<glpi>/marketplace/escalation/`
 2. In GLPI go to **Setup → Plugins**, find *Escalation* and click **Install**, then **Enable**
-3. Configure the hierarchy type under **Setup → Configuration → Escalation**
+3. Configure profile rights under **Administration → Profiles → Escalation**
+4. Configure the hierarchy type under **Setup → Configuration → Escalation** if legacy hierarchical levels are still used
+
+For upgrades from 1.2.0, read [docs/UPGRADE-2.0.md](docs/UPGRADE-2.0.md). Administration, permissions, cron, import, audit and reprocessing are covered in [docs/ADMINISTRATION.md](docs/ADMINISTRATION.md). A reproducible Docker environment is documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+## Escalation 2.0 capabilities
+
+- Published immutable versions and editable drafts
+- AND conditions inside OR groups, scoped by entity and priority
+- User, group, direct-supervisor, hierarchy and ticket-actor approvers
+- Safe missing-approver state, strict quorum and explicit outcome branches
+- Native assignment, status, followup, task, category, notification and related-ticket actions
+- Persistent retry queue, execution/action idempotency and append-only audit events
+- Separate business decision and automation status
+- Importable payment workflow in `examples/payment-approval.json`
 
 ---
 
