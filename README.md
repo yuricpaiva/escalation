@@ -22,6 +22,7 @@ The **Escalation** plugin provides versioned, auditable approval workflows for G
 ## Features
 
 - **Multi-step flows** — each flow defines ordered steps that execute sequentially; a step only starts after the previous one is fully resolved
+- **Optional technician activities** — administrators can make an action available under *Adicionar atividade*; the technician sees only its business name while routing rules remain in the flow
 - **Two step types**
   - **People** — validations are sent to specific users and/or to ticket actors (requesters, assigned, observers)
   - **Hierarchy** — validations are resolved dynamically by traversing the requester's supervisor chain
@@ -110,6 +111,10 @@ A template contains rich text (shown as the validation request content) and can 
 ---
 
 ## How approval flows work
+
+### Optional technician activities
+
+Add **Atividade opcional** to the visual editor at the point where a technician must choose whether extra work is needed. Give it a business-facing name (for example, *Realizar compra pela internet*), choose the internal GLPI action and configure its parameters. On the ticket, the currently assigned technician uses **Adicionar atividade** and selects that name. The configured action then runs and the flow continues normally. If the ticket is solved without selecting it, the optional activity is recorded as skipped and does not block completion.
 
 ```
 Ticket created

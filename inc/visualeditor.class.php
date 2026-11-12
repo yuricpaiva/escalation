@@ -119,6 +119,7 @@ final class PluginEscalationVisualEditor {
         $node['action'] = $action ? [
           'type' => $action['type'], 'parameters' => $parameters,
           'errorPolicy' => $action['error_policy'], 'maxAttempts' => (int) $action['max_attempts'],
+          'manual' => ($step['activation_mode'] ?? 'automatic') === 'manual',
         ] : ['type' => '', 'parameters' => [], 'errorPolicy' => 'retry', 'maxAttempts' => 3];
         if ($action && !in_array($action['type'], PluginEscalationActionExecutor::types(), true)) {
           $unsupported[] = sprintf(__('A ação "%s" só pode ser alterada no Modo avançado.', 'escalation'), $action['type']);
@@ -340,6 +341,7 @@ final class PluginEscalationVisualEditor {
           'plugin_escalation_flows_id' => $flow_id, 'plugin_escalation_flowversions_id' => $version_id,
           'name' => trim((string) $node['name']), 'type' => PluginEscalationStep::TYPE_PEOPLE,
           'step_kind' => $kind, 'step_order' => $index + 1,
+          'activation_mode' => $kind === 'action' && !empty($node['action']['manual']) ? 'manual' : 'automatic',
           'timeout_days' => max(0, (int) ($approval['timeoutDays'] ?? 0)),
           'quorum_type' => $approval['quorum'] ?? PluginEscalationStep::QUORUM_MIN1,
           'hierarchy_level' => max(1, (int) ($approval['hierarchyLevel'] ?? 1)),

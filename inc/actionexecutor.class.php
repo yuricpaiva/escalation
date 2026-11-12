@@ -36,6 +36,9 @@ final class PluginEscalationActionExecutor {
     if ($type === 'add_followup' && isset($parameters['is_private']) && !in_array($parameters['is_private'], [0,1,true,false], true)) {
       return [__('"is_private" deve ser booleano.', 'escalation')];
     }
+    if (in_array($type, ['assign_user','assign_group'], true) && isset($parameters['replace_assignees']) && !in_array($parameters['replace_assignees'], [0,1,true,false], true)) {
+      return [__('"replace_assignees" deve ser booleano.', 'escalation')];
+    }
     if ($type === 'notify' && (!isset($parameters['event']) || !is_string($parameters['event']) || trim($parameters['event']) === '')) {
       return [__('O evento de notificação é obrigatório.', 'escalation')];
     }
@@ -195,10 +198,12 @@ final class PluginEscalationActionExecutor {
     if (!$ticket->getFromDB($ticket_id)) throw new RuntimeException('Ticket not found');
     switch ($action['type']) {
       case 'assign_user':
+        if (!empty($p['replace_assignees'])) self::clearAssignees($ticket_id);
         $relation = new Ticket_User();
         $id = $relation->add(['tickets_id' => $ticket_id, 'users_id' => (int) ($p['users_id'] ?? 0), 'type' => CommonITILActor::ASSIGN, '_escalation_action' => 1]);
         break;
       case 'assign_group':
+        if (!empty($p['replace_assignees'])) self::clearAssignees($ticket_id);
         $relation = new Group_Ticket();
         $id = $relation->add(['tickets_id' => $ticket_id, 'groups_id' => (int) ($p['groups_id'] ?? 0), 'type' => CommonITILActor::ASSIGN, '_escalation_action' => 1]);
         break;
@@ -219,5 +224,17 @@ final class PluginEscalationActionExecutor {
     }
     if (!$id) throw new RuntimeException('GLPI rejected action ' . $action['type']);
     return ['item_id' => $id];
+  }
+
+  private static function clearAssignees(int $ticket_id): void {
+    global $DB;
+    foreach ($DB->request(['SELECT' => ['id'], 'FROM' => Ticket_User::getTable(), 'WHERE' => ['tickets_id' => $ticket_id, 'type' => CommonITILActor::ASSIGN]]) as $row) {
+      $relation = new Ticket_User();
+      $relation->delete(['id' => (int) $row['id']]);
+    }
+    foreach ($DB->request(['SELECT' => ['id'], 'FROM' => Group_Ticket::getTable(), 'WHERE' => ['tickets_id' => $ticket_id, 'type' => CommonITILActor::ASSIGN]]) as $row) {
+      $relation = new Group_Ticket();
+      $relation->delete(['id' => (int) $row['id']]);
+    }
   }
 }

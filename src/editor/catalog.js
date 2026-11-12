@@ -1,5 +1,6 @@
 export const blockCatalog = [
   { kind: 'approval', icon: 'ti-user-check', title: 'Solicitar aprovação', description: 'Pede a validação de pessoas ou grupos.' },
+  { kind: 'manual_action', icon: 'ti-hand-click', title: 'Atividade opcional', description: 'O técnico escolhe se deseja executar esta atividade.' },
   { kind: 'assign_user', icon: 'ti-user-share', title: 'Atribuir chamado', description: 'Encaminha o chamado para um técnico.' },
   { kind: 'assign_group', icon: 'ti-users-group', title: 'Atribuir a um grupo', description: 'Encaminha o chamado para um grupo técnico.' },
   { kind: 'create_task', icon: 'ti-list-check', title: 'Criar tarefa', description: 'Inclui uma tarefa no chamado.' },
@@ -32,13 +33,15 @@ export const sourceLabels = {
   requester: 'Solicitantes do chamado', assigned: 'Técnicos atribuídos', observer: 'Observadores',
 };
 
-export function defaultAction(type) {
-  const parameters = type === 'add_followup' ? { content: '', is_private: 0 }
+export function defaultAction(type, manual = false) {
+  const parameters = type === 'assign_user' ? { users_id: 0, replace_assignees: manual ? 1 : 0 }
+    : type === 'assign_group' ? { groups_id: 0, replace_assignees: manual ? 1 : 0 }
+    : type === 'add_followup' ? { content: '', is_private: 0 }
     : type === 'create_task' ? { content: '', users_id: 0, groups_id: 0 }
     : type === 'notify' ? { event: 'escalation_workflow' }
     : type === 'create_related_ticket' ? { name: '', content: '', entities_id: 0, itilcategories_id: 0, type: 2 }
     : {};
-  return { type, parameters, errorPolicy: 'retry', maxAttempts: 3 };
+  return { type, parameters, errorPolicy: 'retry', maxAttempts: 3, manual };
 }
 
 export function defaultApproval() {

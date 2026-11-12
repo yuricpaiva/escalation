@@ -34,7 +34,8 @@ export function ApprovalNode({ selected, data }) {
   </>;
 }
 export function ActionNode({ selected, data }) {
-  return <><Handle type="target" position={Position.Top} /><Shell icon="ti-bolt" tone="action" title={data.name || actionLabels[data.action?.type] || 'Ação automática'} subtitle="Executada ao chegar nesta etapa" selected={selected} error={data.error} /><Handle type="source" id="success" position={Position.Bottom} style={{ left: '38%' }} /><Handle type="source" id="failure" position={Position.Bottom} style={{ left: '62%' }} /></>;
+  const manual = !!data.action?.manual;
+  return <><Handle type="target" position={Position.Top} /><Shell icon={manual ? 'ti-hand-click' : 'ti-bolt'} tone="action" title={data.name || actionLabels[data.action?.type] || 'Ação automática'} subtitle={manual ? 'Disponível em Adicionar atividade' : 'Executada ao chegar nesta etapa'} selected={selected} error={data.error} badge={manual ? 'Opcional' : null} /><Handle type="source" id="success" position={Position.Bottom} style={{ left: '38%' }} /><Handle type="source" id="failure" position={Position.Bottom} style={{ left: '62%' }} /></>;
 }
 export function FinishNode({ selected }) {
   return <><Handle type="target" position={Position.Top} /><Shell icon="ti-flag-check" tone="finish" title="Fluxo concluído" subtitle="Todas as etapas foram executadas" selected={selected} /></>;

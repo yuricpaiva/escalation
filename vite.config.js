@@ -11,8 +11,8 @@ export default defineConfig({
     rollupOptions: {
       input: 'src/editor/main.jsx',
       output: {
-        entryFileNames: 'visual-editor-2.1.11.js',
-        assetFileNames: ({ names = [] }) => names.some((name) => name.endsWith('.css')) ? 'visual-editor-2.1.11.css' : '[name][extname]',
+        entryFileNames: 'visual-editor-2.2.0.js',
+        assetFileNames: ({ names = [] }) => names.some((name) => name.endsWith('.css')) ? 'visual-editor-2.2.0.css' : '[name][extname]',
       },
     },
   },

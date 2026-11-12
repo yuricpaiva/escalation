@@ -1,6 +1,6 @@
 <?php
 
-define('PLUGIN_ESCALATION_VERSION', '2.1.14');
+define('PLUGIN_ESCALATION_VERSION', '2.2.0');
 
 define('PLUGIN_ESCALATION_MIN_GLPI', '11.0.0');
 define('PLUGIN_ESCALATION_MAX_GLPI', '12.0.0');
@@ -19,8 +19,8 @@ function plugin_init_escalation() {
 
   $request_uri = $_SERVER['REQUEST_URI'] ?? '';
   if (str_contains($request_uri, '/plugins/escalation/front/flow.form.php')) {
-    $PLUGIN_HOOKS['add_javascript_module']['escalation'][] = 'build/visual-editor-2.1.11.js';
-    $PLUGIN_HOOKS['add_css']['escalation'][] = 'build/visual-editor-2.1.11.css';
+    $PLUGIN_HOOKS['add_javascript_module']['escalation'][] = 'build/visual-editor-2.2.0.js';
+    $PLUGIN_HOOKS['add_css']['escalation'][] = 'build/visual-editor-2.2.0.css';
   }
   if (str_contains($request_uri, '/front/ticket.form.php')) {
     $PLUGIN_HOOKS['add_javascript']['escalation'][] = 'js/solve-button.js';

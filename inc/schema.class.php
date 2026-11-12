@@ -20,6 +20,7 @@ final class PluginEscalationSchema {
     self::field(PluginEscalationStep::getTable(), 'step_kind', "varchar(24) COLLATE $collation NOT NULL DEFAULT 'approval'");
     self::field(PluginEscalationStep::getTable(), 'prevent_self_approval', "tinyint(1) NOT NULL DEFAULT '1'");
     self::field(PluginEscalationStep::getTable(), 'allow_solve', "tinyint(1) NOT NULL DEFAULT '0'");
+    self::field(PluginEscalationStep::getTable(), 'activation_mode', "varchar(16) COLLATE $collation NOT NULL DEFAULT 'automatic'");
     self::field(PluginEscalationStep::getTable(), 'fallback_users_id', "int $sign NOT NULL DEFAULT '0'");
     self::field(PluginEscalationTicketFlow::getTable(), 'engine_version', "tinyint NOT NULL DEFAULT '1'");
     self::field(PluginEscalationTicketFlow::getTable(), 'plugin_escalation_flowversions_id', "int $sign NOT NULL DEFAULT '0'");

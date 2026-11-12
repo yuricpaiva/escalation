@@ -92,7 +92,72 @@ class PluginEscalationTicketFlow extends CommonDBTM {
     if ($users_id > 0 && self::findPendingApproverStep($ticket->getID(), $users_id) !== null) {
       return true;
     }
+    if ($users_id > 0 && self::findPendingManualAction($ticket->getID(), $users_id) !== null) {
+      return true;
+    }
     return self::canView() && $ticket->canViewItem();
+  }
+
+  /** @return array{ticketstep:array,step:array,flow:array}|null */
+  static function findPendingManualAction(int $ticket_id, int $users_id): ?array {
+    global $DB;
+    if ($ticket_id <= 0 || $users_id <= 0 || !self::isAssignedTechnician($ticket_id, $users_id)) return null;
+    $row = $DB->request([
+      'SELECT' => [
+        'ts.id AS ticketstep_id', 'ts.plugin_escalation_ticketflows_id',
+        's.id AS step_id', 's.name AS step_name', 'tf.current_step',
+      ],
+      'FROM' => PluginEscalationTicketStep::getTable() . ' AS ts',
+      'INNER JOIN' => [
+        self::getTable() . ' AS tf' => ['ON' => ['ts' => 'plugin_escalation_ticketflows_id', 'tf' => 'id']],
+        PluginEscalationStep::getTable() . ' AS s' => ['ON' => ['ts' => 'plugin_escalation_steps_id', 's' => 'id']],
+      ],
+      'WHERE' => [
+        'tf.tickets_id' => $ticket_id,
+        'tf.status' => self::STATUS_PENDING,
+        'tf.state' => 'running',
+        'ts.status' => PluginEscalationTicketStep::STATUS_PENDING,
+        's.step_kind' => 'action',
+        's.activation_mode' => 'manual',
+      ],
+      'LIMIT' => 1,
+    ])->current();
+    if (!$row) return null;
+    return [
+      'ticketstep' => ['id' => (int) $row['ticketstep_id']],
+      'step' => ['id' => (int) $row['step_id'], 'name' => (string) $row['step_name']],
+      'flow' => ['id' => (int) $row['plugin_escalation_ticketflows_id']],
+    ];
+  }
+
+  private static function isAssignedTechnician(int $ticket_id, int $users_id): bool {
+    global $DB;
+    if (countElementsInTable('glpi_tickets_users', [
+      'tickets_id' => $ticket_id, 'users_id' => $users_id, 'type' => CommonITILActor::ASSIGN,
+    ]) > 0) return true;
+    $groups = array_map('intval', array_column(iterator_to_array($DB->request([
+      'SELECT' => ['groups_id'], 'FROM' => 'glpi_groups_users', 'WHERE' => ['users_id' => $users_id],
+    ])), 'groups_id'));
+    return $groups && countElementsInTable('glpi_groups_tickets', [
+      'tickets_id' => $ticket_id, 'groups_id' => $groups, 'type' => CommonITILActor::ASSIGN,
+    ]) > 0;
+  }
+
+  static function triggerManualAction(int $ticketstep_id, int $ticket_id, int $users_id): bool {
+    global $DB;
+    $available = self::findPendingManualAction($ticket_id, $users_id);
+    if (!$available || (int) $available['ticketstep']['id'] !== $ticketstep_id) return false;
+    $queued = PluginEscalationActionExecutor::queueForEvent(
+      (int) $available['flow']['id'], 'step_activated', (int) $available['step']['id']
+    );
+    if ($queued <= 0) return false;
+    PluginEscalationAudit::record((int) $available['flow']['id'], $ticket_id, 'step.manual_triggered', [
+      'ticket_step_id' => $ticketstep_id,
+      'step_id' => (int) $available['step']['id'],
+      'users_id' => $users_id,
+    ]);
+    PluginEscalationActionExecutor::processDueNow();
+    return true;
   }
 
   /**
@@ -394,6 +459,13 @@ class PluginEscalationTicketFlow extends CommonDBTM {
     if (($step_data['step_kind'] ?? 'approval') === 'action') {
       $ts = new PluginEscalationTicketStep();
       if ($ts->getFromDB($ticketstep_id)) {
+        if (($step_data['activation_mode'] ?? 'automatic') === 'manual') {
+          PluginEscalationAudit::record((int) $ts->fields['plugin_escalation_ticketflows_id'], $ticket->getID(), 'step.manual_available', [
+            'ticket_step_id' => $ticketstep_id,
+            'step_id' => (int) $step_data['id'],
+          ]);
+          return;
+        }
         $queued = PluginEscalationActionExecutor::queueForEvent((int) $ts->fields['plugin_escalation_ticketflows_id'], 'step_activated', (int) $step_data['id']);
         if ($queued === 0) {
           $DB->update(PluginEscalationTicketStep::getTable(), ['status' => PluginEscalationTicketStep::STATUS_APPROVED, 'outcome' => 'success', 'completed_at' => date('Y-m-d H:i:s')], ['id' => $ticketstep_id]);
@@ -590,6 +662,22 @@ class PluginEscalationTicketFlow extends CommonDBTM {
 
     $step_def = new PluginEscalationStep();
     if (!$step_def->getFromDB($current_ts['plugin_escalation_steps_id'])) return;
+
+    // Uma atividade opcional não utilizada não bloqueia a conclusão normal do chamado.
+    if (($step_def->fields['step_kind'] ?? '') === 'action' && ($step_def->fields['activation_mode'] ?? 'automatic') === 'manual') {
+      $now = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
+      $DB->update(PluginEscalationTicketStep::getTable(), [
+        'status' => PluginEscalationTicketStep::STATUS_SKIPPED,
+        'outcome' => 'skipped',
+        'completed_at' => $now,
+      ], ['id' => (int) $current_ts['id'], 'status' => PluginEscalationTicketStep::STATUS_PENDING]);
+      PluginEscalationAudit::record((int) $tf_row['id'], $ticket->getID(), 'step.manual_skipped', [
+        'ticket_step_id' => (int) $current_ts['id'],
+        'step_id' => (int) $current_ts['plugin_escalation_steps_id'],
+      ]);
+      self::completeFlow((int) $tf_row['id'], self::STATUS_APPROVED);
+      return;
+    }
 
     // Só age se este passo estava aguardando solução (generate_immediately = 0)
     if (!empty($step_def->fields['generate_immediately'])) return;
@@ -943,6 +1031,22 @@ class PluginEscalationTicketFlow extends CommonDBTM {
       echo "</form></div>";
     }
 
+    $manual = self::findPendingManualAction($ticket_id, (int) Session::getLoginUserID());
+    if ($manual) {
+      $action = PluginEscalationConfig::getWebPath() . '/front/manualaction.form.php';
+      echo "<div class='card mb-4'><div class='card-body d-flex flex-wrap align-items-center gap-3'>";
+      echo "<div><h3 class='card-title mb-1'>" . __('Atividade opcional', 'escalation') . "</h3>";
+      echo "<p class='text-muted mb-0'>" . __('Use somente quando este chamado precisar de uma atividade adicional.', 'escalation') . "</p></div>";
+      echo "<div class='dropdown ms-auto'>";
+      echo "<button class='btn btn-primary dropdown-toggle' type='button' data-bs-toggle='dropdown' aria-expanded='false'><i class='ti ti-plus me-1'></i> " . __('Adicionar atividade', 'escalation') . "</button>";
+      echo "<ul class='dropdown-menu dropdown-menu-end'><li><form method='post' action='" . htmlescape($action) . "'>";
+      echo Html::hidden('_glpi_csrf_token', ['value' => Session::getNewCSRFToken()]);
+      echo Html::hidden('ticketstep_id', ['value' => (int) $manual['ticketstep']['id']]);
+      echo Html::hidden('tickets_id', ['value' => $ticket_id]);
+      echo "<button class='dropdown-item' name='trigger' value='1'><i class='ti ti-hand-click me-2'></i>" . htmlescape($manual['step']['name']) . "</button>";
+      echo "</form></li></ul></div></div></div>";
+    }
+
     foreach ($flows_array as $tf_data) {
       $tf_id     = $tf_data['id'];
       $status    = $tf_data['status'];
@@ -954,7 +1058,7 @@ class PluginEscalationTicketFlow extends CommonDBTM {
 
       // Etapas
       $steps_data = $DB->request([
-        'SELECT' => ['ts.*', 's.name AS step_name', 's.type', 's.quorum_type', 's.step_order', 's.allow_solve', 's.step_kind'],
+        'SELECT' => ['ts.*', 's.name AS step_name', 's.type', 's.quorum_type', 's.step_order', 's.allow_solve', 's.step_kind', 's.activation_mode'],
         'FROM'   => PluginEscalationTicketStep::getTable() . ' AS ts',
         'INNER JOIN' => [
           PluginEscalationStep::getTable() . ' AS s' => ['ON' => ['ts' => 'plugin_escalation_steps_id', 's' => 'id']]
@@ -968,8 +1072,11 @@ class PluginEscalationTicketFlow extends CommonDBTM {
         $ts_status = $ts['status'];
         echo "<tr class='tab_bg_" . (($i % 2) + 1) . "'>";
         echo "<td><b>#" . ($i + 1) . " " . htmlspecialchars($ts['step_name']) . "</b></td>";
-        echo "<td>" . PluginEscalationTicketStep::getStatusLabel($ts_status) . "</td>";
-        echo "<td>" . PluginEscalationStep::getTypeName_($ts['type']);
+        $is_manual = ($ts['step_kind'] ?? '') === 'action' && ($ts['activation_mode'] ?? 'automatic') === 'manual';
+        echo "<td>" . ($is_manual && (int) $ts_status === PluginEscalationTicketStep::STATUS_PENDING
+          ? "<span class='badge bg-blue-lt'>" . __('Disponível', 'escalation') . "</span>"
+          : PluginEscalationTicketStep::getStatusLabel($ts_status)) . "</td>";
+        echo "<td>" . ($is_manual ? __('Atividade opcional', 'escalation') : PluginEscalationStep::getTypeName_($ts['type']));
         if ($ts['type'] === PluginEscalationStep::TYPE_PEOPLE) {
           echo " / " . PluginEscalationStep::getQuorumName($ts['quorum_type']);
         } elseif ($ts['type'] === PluginEscalationStep::TYPE_AUTO) {

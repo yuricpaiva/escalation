@@ -13,6 +13,13 @@ const definition = {
 };
 
 describe('diagrama do editor visual', () => {
+  it('preserva o modo manual de uma atividade opcional', () => {
+    const action = defaultAction('assign_user', true);
+    expect(action.manual).toBe(true);
+    expect(action.type).toBe('assign_user');
+    expect(action.parameters.replace_assignees).toBe(1);
+  });
+
   it('representa o cenário sequencial de pagamentos', () => {
     const graph = graphFromDefinition(definition, []);
     expect(graph.nodes.map((node) => node.id)).toEqual(['start', 'condition-1', 'step-1', 'step-2', 'step-3', 'finish']);

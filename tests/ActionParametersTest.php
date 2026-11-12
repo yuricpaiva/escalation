@@ -8,6 +8,8 @@ final class ActionParametersTest extends TestCase {
     self::assertNotEmpty(\PluginEscalationActionExecutor::validateParameters('assign_user', ['users_id' => '7']));
     self::assertSame([], \PluginEscalationActionExecutor::validateParameters('assign_user', ['users_id' => 7]));
     self::assertNotEmpty(\PluginEscalationActionExecutor::validateParameters('change_category', ['itilcategories_id' => 0]));
+    self::assertNotEmpty(\PluginEscalationActionExecutor::validateParameters('assign_user', ['users_id' => 7, 'replace_assignees' => 'yes']));
+    self::assertSame([], \PluginEscalationActionExecutor::validateParameters('assign_user', ['users_id' => 7, 'replace_assignees' => true]));
   }
 
   public function testTextAndPrivacyParameters(): void {

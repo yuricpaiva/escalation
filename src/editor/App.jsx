@@ -132,8 +132,9 @@ function Editor({ config }) {
       setSelectedId(key); setPropsOpen(true); setPaletteOpen(false); return;
     }
     const key = nextKey('step'); const type = kind === 'approval' ? 'approval' : 'action';
+    const manual = kind === 'manual_action';
     const step = { key, kind: type, name: kind === 'approval' ? 'Nova aprovação' : blockCatalog.find((block) => block.kind === kind)?.title || 'Nova ação', position: position || positionFor(definition.steps.length), transitions: {} };
-    if (type === 'approval') step.approval = defaultApproval(); else step.action = defaultAction(kind);
+    if (type === 'approval') step.approval = defaultApproval(); else step.action = defaultAction(manual ? 'assign_user' : kind, manual);
     updateDefinition({ ...definition, steps: [...definition.steps, step] }); setSelectedId(key); setPropsOpen(true);
   }, [definition]);
 
